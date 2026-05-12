@@ -15,6 +15,14 @@ const TYPE_OPTIONS = [
   { value: 'frase',   label: 'Solo frases 💬' },
 ]
 
+const BOOST_OPTIONS = [
+  { value: 50,  label: 'Igual 50/50' },
+  { value: 70,  label: 'Nueva 70%' },
+  { value: 80,  label: 'Nueva 80% ✨' },
+  { value: 90,  label: 'Nueva 90%' },
+  { value: 100, label: 'Solo nueva' },
+]
+
 function OptionRow({ label, children }) {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-md">
@@ -119,6 +127,20 @@ export default function SettingsScreen() {
               </Chip>
             ))}
           </OptionRow>
+
+          <div className="bg-white rounded-2xl p-5 shadow-md">
+            <p className="font-kids text-2xl text-purple-700 mb-1">Prioridad lección nueva 🎯</p>
+            <p className="font-body text-sm text-purple-400 mb-4">
+              Cuánto más seguido aparecen las palabras de la lección elegida vs las anteriores
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {BOOST_OPTIONS.map(o => (
+                <Chip key={o.value} selected={(settings.lessonBoost ?? 80) === o.value} onClick={() => updateSettings({ lessonBoost: o.value })}>
+                  {o.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
 
           <OptionRow label="Tiempo por palabra ⏱️">
             {TIME_OPTIONS.map(o => (

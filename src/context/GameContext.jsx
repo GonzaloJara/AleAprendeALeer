@@ -20,6 +20,7 @@ function defaultSettings() {
     contentType: 'todas',
     timeLimit: 0,
     lessonId: null,
+    lessonBoost: 80,
     animationsEnabled: true,
   }
 }
@@ -75,16 +76,43 @@ function shuffle(arr) {
 function buildQueue(words, lessons, settings) {
   let pool = words.filter(w => w.active !== false)
 
-  if (settings.lessonId) {
-    const included = new Set(getLessonsUpTo(lessons, settings.lessonId).map(l => l.id))
-    pool = pool.filter(w => included.has(w.lesson_id))
-  }
-
   if (settings.contentType !== 'todas') {
     pool = pool.filter(w => w.type === settings.contentType)
   }
 
-  return shuffle(pool.length > 0 ? pool : words.filter(w => w.active !== false))
+  if (!settings.lessonId) {
+    return shuffle(pool.length > 0 ? pool : words.filter(w => w.active !== false))
+  }
+
+  const included = new Set(getLessonsUpTo(lessons, settings.lessonId).map(l => l.id))
+  pool = pool.filter(w => included.has(w.lesson_id))
+  if (!pool.length) return shuffle(words.filter(w => w.active !== false))
+
+  const currentWords  = pool.filter(w => w.lesson_id === settings.lessonId)
+  const previousWords = pool.filter(w => w.lesson_id !== settings.lessonId)
+  const boost = (settings.lessonBoost ?? 80) / 100
+
+  if (!currentWords.length || !previousWords.length || boost <= 0) {
+    return shuffle(pool)
+  }
+
+  // Weighted queue: each slot picks from current pool with probability=boost,
+  // previous pool otherwise. Both sub-pools cycle independently when exhausted.
+  const curr = shuffle([...currentWords])
+  const prev = shuffle([...previousWords])
+  const size = Math.max(20, currentWords.length + previousWords.length)
+  let ci = 0, pi = 0
+  const result = []
+  for (let i = 0; i < size; i++) {
+    if (Math.random() < boost) {
+      result.push(curr[ci % curr.length])
+      ci++
+    } else {
+      result.push(prev[pi % prev.length])
+      pi++
+    }
+  }
+  return result
 }
 
 function reducer(state, action) {
