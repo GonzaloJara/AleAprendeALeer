@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: #fef9f0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .text-shadow-kids {
+    text-shadow: 3px 3px 0px rgba(0,0,0,0.15);
+  }
+  .btn-press {
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .btn-press:active {
+    transform: translateY(3px);
+    box-shadow: none !important;
+  }
+}
+
+/* Floating stars background */
+.stars-bg {
+  background-image:
+    radial-gradient(circle, #ffd700 1px, transparent 1px),
+    radial-gradient(circle, #ff69b4 1px, transparent 1px),
+    radial-gradient(circle, #87ceeb 1px, transparent 1px);
+  background-size: 100px 100px, 150px 150px, 200px 200px;
+  background-position: 0 0, 50px 75px, 100px 50px;
+}
+
+/* Word card glow */
+.word-glow {
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.4), 0 8px 32px rgba(0,0,0,0.12);
+}
+
+/* Timer pulse when low */
+.timer-danger {
+  animation: timerPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); color: #ef4444; }
+  50% { transform: scale(1.2); color: #dc2626; }
+}
+
+/* Scrollbar kids style */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #fef9f0; }
+::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 4px; }
