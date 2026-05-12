@@ -4,7 +4,7 @@ import { useGame } from '../context/GameContext'
 const emojis = ['📚', '⭐', '🌈', '🦋', '🎉', '🌟', '🎈', '🦄']
 
 export default function HomeScreen() {
-  const { startGame, setScreen, state } = useGame()
+  const { setScreen, state } = useGame()
   const anim = state.settings.animationsEnabled !== false
 
   return (
@@ -45,7 +45,7 @@ export default function HomeScreen() {
 
         <div className="flex flex-col gap-5 items-center mt-4">
           <motion.button
-            onClick={startGame}
+            onClick={() => setScreen('lesson-select')}
             className="btn-press bg-green-400 hover:bg-green-500 text-white font-kids text-4xl px-14 py-6 rounded-3xl shadow-[0_6px_0_#16a34a] w-72"
             whileHover={anim ? { scale: 1.05 } : {}}
             whileTap={anim ? { scale: 0.95 } : {}}

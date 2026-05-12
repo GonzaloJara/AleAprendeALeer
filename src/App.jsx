@@ -5,6 +5,7 @@ import GameScreen from './components/GameScreen'
 import SettingsScreen from './components/SettingsScreen'
 import DashboardScreen from './components/DashboardScreen'
 import ResultsScreen from './components/ResultsScreen'
+import LessonSelectScreen from './components/LessonSelectScreen'
 
 const screenVariants = {
   initial: { opacity: 0, scale: 0.96 },
@@ -32,6 +33,7 @@ function AppContent() {
         {screen === 'settings' && <SettingsScreen />}
         {screen === 'dashboard' && <DashboardScreen />}
         {screen === 'results' && <ResultsScreen />}
+        {screen === 'lesson-select' && <LessonSelectScreen />}
       </motion.div>
     </AnimatePresence>
   )
