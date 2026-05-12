@@ -201,16 +201,16 @@ export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   useEffect(() => {
-    Promise.all([fetchTable('lessons'), fetchTable('words')]).then(([dbLessons, dbWords]) => {
+    async function init() {
+      const [dbLessons, dbWords] = await Promise.all([fetchTable('lessons'), fetchTable('words')])
       if (dbLessons === null || dbWords === null) {
-        // Network error — keep cache
         dispatch({ type: 'SET_LOADED' })
         return
       }
       if (dbLessons.length === 0 && dbWords.length === 0) {
-        // Empty DB — seed both tables
-        syncTable('lessons', DEFAULT_LESSONS)
-        syncTable('words',   DEFAULT_WORDS)
+        // Seed: lessons before words to respect any FK-like ordering
+        await syncTable('lessons', DEFAULT_LESSONS)
+        await syncTable('words',   DEFAULT_WORDS)
         dispatch({ type: 'HYDRATE', words: DEFAULT_WORDS, lessons: DEFAULT_LESSONS })
       } else {
         dispatch({
@@ -219,7 +219,8 @@ export function GameProvider({ children }) {
           lessons: dbLessons.length > 0 ? dbLessons : DEFAULT_LESSONS,
         })
       }
-    })
+    }
+    init()
   }, [])
 
   const startGame      = useCallback(() => dispatch({ type: 'START_GAME' }), [])
@@ -240,10 +241,15 @@ export function GameProvider({ children }) {
     syncTable('lessons', lessons)
   }, [])
 
-  const resetAll = useCallback(() => {
+  const resetAll = useCallback(async () => {
     dispatch({ type: 'RESET' })
-    syncTable('lessons', DEFAULT_LESSONS)
-    syncTable('words',   DEFAULT_WORDS)
+    // Delete all words before touching lessons (avoids any ordering issues)
+    const { data: wordIds } = await supabase.from('words').select('id')
+    if (wordIds?.length) {
+      await supabase.from('words').delete().in('id', wordIds.map(r => r.id))
+    }
+    await syncTable('lessons', DEFAULT_LESSONS)
+    await supabase.from('words').insert(DEFAULT_WORDS)
   }, [])
 
   return (
