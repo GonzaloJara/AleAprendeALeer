@@ -1,26 +1,18 @@
 import { motion } from 'framer-motion'
 import { useGame } from '../context/GameContext'
-import { LETTER_GROUP_LABELS } from '../data/words'
 
 const TIME_OPTIONS = [
-  { value: 0, label: 'Sin límite ♾️' },
+  { value: 0,  label: 'Sin límite ♾️' },
   { value: 10, label: '10 segundos ⚡' },
   { value: 30, label: '30 segundos 🕐' },
   { value: 60, label: '1 minuto 🕑' },
 ]
 
 const TYPE_OPTIONS = [
-  { value: 'todas', label: 'Todo 🎲' },
-  { value: 'silaba', label: 'Solo sílabas 🔤' },
+  { value: 'todas',   label: 'Todo 🎲' },
+  { value: 'silaba',  label: 'Solo sílabas 🔤' },
   { value: 'palabra', label: 'Solo palabras 📝' },
-  { value: 'frase', label: 'Solo frases 💬' },
-]
-
-const LEVEL_OPTIONS = [
-  { value: 0, label: 'Todos los niveles 🌈' },
-  { value: 1, label: 'Nivel 1 - Fácil 🌱' },
-  { value: 2, label: 'Nivel 2 - Normal 🌟' },
-  { value: 3, label: 'Nivel 3 - Difícil 🔥' },
+  { value: 'frase',   label: 'Solo frases 💬' },
 ]
 
 function OptionRow({ label, children }) {
@@ -37,7 +29,7 @@ function Chip({ selected, onClick, children }) {
     <motion.button
       onClick={onClick}
       whileTap={{ scale: 0.92 }}
-      className={`font-body font-bold text-lg px-5 py-2 rounded-full border-3 transition-colors ${
+      className={`font-body font-bold text-lg px-5 py-2 rounded-full border-2 transition-colors text-left ${
         selected
           ? 'bg-purple-500 text-white border-purple-700 shadow-md'
           : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
@@ -48,12 +40,40 @@ function Chip({ selected, onClick, children }) {
   )
 }
 
+function LessonChip({ lesson, selected, onClick, allLetters }) {
+  return (
+    <motion.button
+      onClick={onClick}
+      whileTap={{ scale: 0.92 }}
+      className={`font-body font-bold text-lg px-4 py-2 rounded-2xl border-2 transition-colors text-left flex flex-col gap-0.5 ${
+        selected
+          ? 'bg-purple-500 text-white border-purple-700 shadow-md'
+          : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+      }`}
+    >
+      <span>{lesson.name}</span>
+      <span className={`text-sm font-normal tracking-wide ${selected ? 'text-purple-100' : 'text-purple-400'}`}>
+        letras: {allLetters.join(', ')}
+      </span>
+    </motion.button>
+  )
+}
+
 export default function SettingsScreen() {
   const { state, updateSettings, setScreen } = useGame()
-  const { settings } = state
+  const { settings, lessons } = state
+
+  // Build cumulative letter list for each lesson
+  const sortedLessons = [...lessons].sort((a, b) => a.order - b.order)
+  const cumulativeLetters = {}
+  const accum = []
+  for (const l of sortedLessons) {
+    accum.push(...l.new_letters ?? l.newLetters ?? [])
+    cumulativeLetters[l.id] = [...accum]
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-200 to-purple-100 p-6">
+    <div className="min-h-screen bg-gradient-to-b from-blue-200 to-purple-100 p-6 overflow-y-auto">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
           <motion.button
@@ -67,26 +87,35 @@ export default function SettingsScreen() {
         </div>
 
         <div className="flex flex-col gap-5">
+          {/* Lesson selector */}
+          <div className="bg-white rounded-2xl p-5 shadow-md">
+            <p className="font-kids text-2xl text-purple-700 mb-1">Lección 📚</p>
+            <p className="font-body text-sm text-purple-400 mb-4">
+              Cada lección incluye todas las lecciones anteriores
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Chip
+                selected={!settings.lessonId}
+                onClick={() => updateSettings({ lessonId: null })}
+              >
+                Todas las lecciones 🌈
+              </Chip>
+              {sortedLessons.map(l => (
+                <LessonChip
+                  key={l.id}
+                  lesson={l}
+                  selected={settings.lessonId === l.id}
+                  onClick={() => updateSettings({ lessonId: l.id })}
+                  allLetters={cumulativeLetters[l.id] ?? []}
+                />
+              ))}
+            </div>
+          </div>
+
           <OptionRow label="Tipo de contenido 📖">
             {TYPE_OPTIONS.map(o => (
               <Chip key={o.value} selected={settings.contentType === o.value} onClick={() => updateSettings({ contentType: o.value })}>
                 {o.label}
-              </Chip>
-            ))}
-          </OptionRow>
-
-          <OptionRow label="Nivel de dificultad 🎯">
-            {LEVEL_OPTIONS.map(o => (
-              <Chip key={o.value} selected={settings.level === o.value} onClick={() => updateSettings({ level: o.value })}>
-                {o.label}
-              </Chip>
-            ))}
-          </OptionRow>
-
-          <OptionRow label="Letras permitidas 🔡">
-            {Object.entries(LETTER_GROUP_LABELS).map(([key, label]) => (
-              <Chip key={key} selected={settings.letterFilter === key} onClick={() => updateSettings({ letterFilter: key })}>
-                {label}
               </Chip>
             ))}
           </OptionRow>
