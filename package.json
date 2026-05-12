@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://xaloi.github.io/AprendeALeer",
+  "homepage": "https://gonzalojara.github.io/AleAprendeALeer",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
