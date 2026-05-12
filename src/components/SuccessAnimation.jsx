@@ -24,16 +24,19 @@ function FloatingStar({ emoji, x, y, delay }) {
   )
 }
 
-export default function SuccessAnimation({ type, onDone }) {
+export default function SuccessAnimation({ type, onDone, animated = true }) {
   const [msg] = useState(() => type === 'correct' ? randomPick(PRAISE) : randomPick(WRONG_MSG))
   const [windowSize] = useState({ width: window.innerWidth, height: window.innerHeight })
 
-  useEffect(() => {
-    const t = setTimeout(onDone, type === 'correct' ? 1800 : 1200)
-    return () => clearTimeout(t)
-  }, [onDone, type])
+  // Shorter delays when animations are off — just show the text briefly
+  const delay = animated ? (type === 'correct' ? 1800 : 1200) : 600
 
-  const stars = type === 'correct'
+  useEffect(() => {
+    const t = setTimeout(onDone, delay)
+    return () => clearTimeout(t)
+  }, [onDone, delay])
+
+  const stars = animated && type === 'correct'
     ? Array.from({ length: 8 }, (_, i) => ({
         emoji: randomPick(STARS),
         x: 10 + (i * 12) % 80,
@@ -42,6 +45,16 @@ export default function SuccessAnimation({ type, onDone }) {
       }))
     : []
 
+  const boxAnim = animated
+    ? {
+        initial: { scale: 0, rotate: -10 },
+        animate: type === 'correct'
+          ? { scale: [0, 1.3, 1], rotate: [0, 5, -5, 0] }
+          : { scale: [0, 1.1, 1], rotate: [0, -5, 5, 0] },
+        transition: { duration: 0.5, type: 'spring' },
+      }
+    : { initial: false, animate: { scale: 1, rotate: 0 }, transition: { duration: 0 } }
+
   return (
     <AnimatePresence>
       <motion.div
@@ -49,8 +62,9 @@ export default function SuccessAnimation({ type, onDone }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: animated ? 0.2 : 0 }}
       >
-        {type === 'correct' && (
+        {animated && type === 'correct' && (
           <Confetti
             width={windowSize.width}
             height={windowSize.height}
@@ -71,12 +85,7 @@ export default function SuccessAnimation({ type, onDone }) {
               ? 'bg-green-400 border-4 border-green-600'
               : 'bg-red-400 border-4 border-red-600'
           }`}
-          initial={{ scale: 0, rotate: -10 }}
-          animate={type === 'correct'
-            ? { scale: [0, 1.3, 1], rotate: [0, 5, -5, 0] }
-            : { scale: [0, 1.1, 1], rotate: [0, -5, 5, 0] }
-          }
-          transition={{ duration: 0.5, type: 'spring' }}
+          {...boxAnim}
         >
           <p className="font-kids text-5xl text-white text-shadow-kids">{msg}</p>
         </motion.div>

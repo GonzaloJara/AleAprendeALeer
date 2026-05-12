@@ -3,7 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '../context/GameContext'
 import SuccessAnimation from './SuccessAnimation'
 
-function TimerBar({ timeLeft, total }) {
+function wordFontSize(word) {
+  if (word.type === 'frase') return 'clamp(1.6rem, 4vw, 3rem)'
+  const len = word.text.length
+  if (len <= 3)  return 'clamp(5rem, 18vw, 9rem)'
+  if (len <= 5)  return 'clamp(4rem, 14vw, 7.5rem)'
+  if (len <= 7)  return 'clamp(3rem, 10vw, 6rem)'
+  if (len <= 10) return 'clamp(2.2rem, 7vw, 4.5rem)'
+  return             'clamp(1.8rem, 5.5vw, 3.5rem)'
+}
+
+function noAnim(enabled) {
+  return enabled ? {} : { initial: false, animate: {}, exit: {}, transition: { duration: 0 } }
+}
+
+function TimerBar({ timeLeft, total, animated }) {
   const pct = total > 0 ? (timeLeft / total) * 100 : 100
   const danger = timeLeft <= 5 && total > 0
   const color = pct > 50 ? '#4ade80' : pct > 25 ? '#facc15' : '#f87171'
@@ -12,16 +26,14 @@ function TimerBar({ timeLeft, total }) {
     <div className="w-full bg-white/50 rounded-full h-5 overflow-hidden shadow-inner">
       <motion.div
         className="h-full rounded-full"
-        style={{ backgroundColor: color }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 0.5 }}
+        style={{ backgroundColor: color, width: animated ? undefined : `${pct}%` }}
+        animate={animated ? { width: `${pct}%` } : {}}
+        transition={{ duration: animated ? 0.5 : 0 }}
       />
       {danger && (
-        <motion.p
-          className="text-center font-kids text-red-600 text-2xl mt-1 timer-danger"
-        >
+        <p className="text-center font-kids text-red-600 text-2xl mt-1 timer-danger">
           {timeLeft}s ⏰
-        </motion.p>
+        </p>
       )}
     </div>
   )
@@ -45,6 +57,7 @@ function ScoreBadge({ correct, wrong }) {
 export default function GameScreen() {
   const { state, answer, nextWord, tick, endGame } = useGame()
   const { currentWord, session, feedback, settings, timeLeft, timerActive } = state
+  const anim = settings.animationsEnabled !== false
 
   useEffect(() => {
     if (!timerActive) return
@@ -52,15 +65,7 @@ export default function GameScreen() {
     return () => clearInterval(id)
   }, [timerActive, tick])
 
-  const handleNext = useCallback(() => {
-    nextWord()
-  }, [nextWord])
-
-  useEffect(() => {
-    if (feedback !== null) {
-      // Auto-advance after feedback shown (SuccessAnimation calls onDone)
-    }
-  }, [feedback])
+  const handleNext = useCallback(() => { nextWord() }, [nextWord])
 
   if (!currentWord) return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-purple-200 to-yellow-100">
@@ -68,11 +73,16 @@ export default function GameScreen() {
     </div>
   )
 
-  const typeLabel = {
-    silaba: 'sílaba',
-    palabra: 'palabra',
-    frase: 'frase',
-  }[currentWord.type] || ''
+  const typeLabel = { silaba: 'sílaba', palabra: 'palabra', frase: 'frase' }[currentWord.type] || ''
+
+  // Card animation props
+  const cardAnim = anim
+    ? { initial: { opacity: 0, y: 60, scale: 0.8 }, animate: { opacity: 1, y: 0, scale: 1 }, exit: { opacity: 0, y: -60, scale: 0.8 }, transition: { type: 'spring', stiffness: 300, damping: 25 } }
+    : { initial: false, animate: { opacity: 1, y: 0, scale: 1 }, exit: {}, transition: { duration: 0 } }
+
+  const textPulse = anim
+    ? { animate: { scale: [1, 1.02, 1] }, transition: { duration: 2, repeat: Infinity } }
+    : {}
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-sky-200 via-purple-100 to-yellow-100">
@@ -81,18 +91,17 @@ export default function GameScreen() {
         <motion.button
           onClick={endGame}
           className="btn-press bg-gray-200 text-gray-600 font-kids text-xl px-5 py-2 rounded-2xl shadow-[0_3px_0_#9ca3af]"
-          whileTap={{ scale: 0.93 }}
+          whileTap={anim ? { scale: 0.93 } : {}}
         >
           ← Salir
         </motion.button>
-
         <ScoreBadge correct={session.correct} wrong={session.wrong} />
       </div>
 
       {/* Timer */}
       {settings.timeLimit > 0 && (
         <div className="px-6 mt-1">
-          <TimerBar timeLeft={timeLeft} total={settings.timeLimit} />
+          <TimerBar timeLeft={timeLeft} total={settings.timeLimit} animated={anim} />
         </div>
       )}
 
@@ -101,32 +110,18 @@ export default function GameScreen() {
         <AnimatePresence mode="wait">
           <motion.div
             key={currentWord.id}
-            className="w-full max-w-2xl bg-white rounded-[2rem] p-10 word-glow text-center"
-            initial={{ opacity: 0, y: 60, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -60, scale: 0.8 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="w-full max-w-2xl bg-white rounded-[2rem] p-8 word-glow text-center overflow-hidden"
+            {...cardAnim}
           >
             {typeLabel && (
-              <motion.p
-                className="font-body text-xl font-bold text-purple-400 uppercase tracking-widest mb-3"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-              >
+              <p className="font-body text-xl font-bold text-purple-400 uppercase tracking-widest mb-3">
                 {typeLabel}
-              </motion.p>
+              </p>
             )}
             <motion.p
-              className="font-kids text-center leading-tight"
-              style={{
-                fontSize: currentWord.type === 'frase'
-                  ? 'clamp(2.5rem, 8vw, 5rem)'
-                  : 'clamp(4rem, 18vw, 10rem)',
-                color: '#4c1d95',
-              }}
-              animate={{ scale: [1, 1.02, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              className="font-kids text-center leading-tight break-words"
+              style={{ fontSize: wordFontSize(currentWord), color: '#4c1d95', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+              {...textPulse}
             >
               {currentWord.text}
             </motion.p>
@@ -139,8 +134,8 @@ export default function GameScreen() {
             onClick={() => answer(false)}
             disabled={feedback !== null}
             className="btn-press flex-1 bg-red-400 hover:bg-red-500 disabled:opacity-50 text-white font-kids text-4xl py-8 rounded-3xl shadow-[0_8px_0_#b91c1c] flex flex-col items-center gap-1"
-            whileHover={{ scale: feedback ? 1 : 1.04 }}
-            whileTap={{ scale: feedback ? 1 : 0.95 }}
+            whileHover={anim && !feedback ? { scale: 1.04 } : {}}
+            whileTap={anim && !feedback ? { scale: 0.95 } : {}}
           >
             <span className="text-5xl">❌</span>
             <span>Mal</span>
@@ -150,8 +145,8 @@ export default function GameScreen() {
             onClick={() => answer(true)}
             disabled={feedback !== null}
             className="btn-press flex-1 bg-green-400 hover:bg-green-500 disabled:opacity-50 text-white font-kids text-4xl py-8 rounded-3xl shadow-[0_8px_0_#15803d] flex flex-col items-center gap-1"
-            whileHover={{ scale: feedback ? 1 : 1.04 }}
-            whileTap={{ scale: feedback ? 1 : 0.95 }}
+            whileHover={anim && !feedback ? { scale: 1.04 } : {}}
+            whileTap={anim && !feedback ? { scale: 0.95 } : {}}
           >
             <span className="text-5xl">✅</span>
             <span>¡Bien!</span>
@@ -159,9 +154,8 @@ export default function GameScreen() {
         </div>
       </div>
 
-      {/* Feedback overlay */}
       {feedback && (
-        <SuccessAnimation type={feedback} onDone={handleNext} />
+        <SuccessAnimation type={feedback} onDone={handleNext} animated={anim} />
       )}
     </div>
   )

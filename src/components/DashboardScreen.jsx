@@ -76,6 +76,7 @@ export default function DashboardScreen() {
     else setConfirmReset(true)
   }
 
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-100 to-yellow-50 p-5">
       <div className="max-w-2xl mx-auto">

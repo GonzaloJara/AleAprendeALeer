@@ -98,6 +98,15 @@ export default function SettingsScreen() {
               </Chip>
             ))}
           </OptionRow>
+
+          <OptionRow label="Animaciones 🎬">
+            <Chip selected={settings.animationsEnabled !== false} onClick={() => updateSettings({ animationsEnabled: true })}>
+              Activadas ✨
+            </Chip>
+            <Chip selected={settings.animationsEnabled === false} onClick={() => updateSettings({ animationsEnabled: false })}>
+              Desactivadas 📺
+            </Chip>
+          </OptionRow>
         </div>
 
         <motion.button
