@@ -53,10 +53,10 @@ function WordCard({ word, lessonName, colorClass, onToggle, onDelete }) {
 }
 
 export default function DashboardScreen() {
-  const { state, updateWords, updateLessons, resetAll, setScreen } = useGame()
+  const { state, updateWords, updateLessons, setScreen } = useGame()
   const { words, lessons } = state
 
-  const sortedLessons = [...lessons].sort((a, b) => a.order - b.order)
+  const sortedLessons = [...lessons].sort((a, b) => a.sort_order - b.sort_order)
   const lessonMap = Object.fromEntries(lessons.map(l => [l.id, l]))
 
   // ── Add word ──
@@ -73,7 +73,6 @@ export default function DashboardScreen() {
   const [filterLesson, setFilterLesson] = useState('todas')
   const [filterType,   setFilterType]   = useState('todas')
   const [search,       setSearch]       = useState('')
-  const [confirmReset, setConfirmReset] = useState(false)
 
   const filtered = words.filter(w => {
     if (filterLesson !== 'todas' && w.lesson_id !== filterLesson) return false
@@ -93,9 +92,9 @@ export default function DashboardScreen() {
     const name = lessonName.trim()
     if (!name) return
     const letters = lessonLetters.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-    const maxOrder = Math.max(0, ...lessons.map(l => l.order))
+    const maxOrder = Math.max(0, ...lessons.map(l => l.sort_order))
     const id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-    updateLessons([...lessons, { id, name, newLetters: letters, new_letters: letters, order: maxOrder + 1 }])
+    updateLessons([...lessons, { id, name, new_letters: letters, sort_order: maxOrder + 1 }])
     setLessonName('')
     setLessonLetters('')
     setShowAddLesson(false)
@@ -106,11 +105,6 @@ export default function DashboardScreen() {
   const deleteLesson = (id) => {
     updateLessons(lessons.filter(l => l.id !== id))
     updateWords(words.filter(w => w.lesson_id !== id))
-  }
-
-  const handleReset = () => {
-    if (confirmReset) { resetAll(); setConfirmReset(false) }
-    else setConfirmReset(true)
   }
 
   return (
@@ -166,7 +160,7 @@ export default function DashboardScreen() {
             {sortedLessons.map((l, i) => (
               <div key={l.id} className={`flex items-center gap-1 pl-3 pr-1 py-1 rounded-full text-sm font-bold ${LESSON_COLORS[i % LESSON_COLORS.length]}`}>
                 <span>{l.name}</span>
-                <span className="opacity-60 text-xs">+{(l.new_letters ?? l.newLetters ?? []).join(',')}</span>
+                <span className="opacity-60 text-xs">+{(l.new_letters ?? []).join(',')}</span>
                 <button onClick={() => deleteLesson(l.id)} className="ml-1 opacity-50 hover:opacity-100 font-bold">×</button>
               </div>
             ))}
@@ -234,13 +228,6 @@ export default function DashboardScreen() {
           )}
         </div>
 
-        {/* Reset */}
-        <motion.button onClick={handleReset} whileTap={{ scale: 0.97 }}
-          className={`btn-press mt-6 w-full font-kids text-xl py-4 rounded-2xl shadow-[0_4px_0_#dc2626] ${
-            confirmReset ? 'bg-red-500 text-white' : 'bg-red-100 text-red-600'
-          }`}>
-          {confirmReset ? '¿Seguro? Toca de nuevo para confirmar 🗑️' : 'Restablecer lecciones y palabras originales 🔄'}
-        </motion.button>
       </div>
     </div>
   )

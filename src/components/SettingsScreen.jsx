@@ -64,11 +64,11 @@ export default function SettingsScreen() {
   const { settings, lessons } = state
 
   // Build cumulative letter list for each lesson
-  const sortedLessons = [...lessons].sort((a, b) => a.order - b.order)
+  const sortedLessons = [...lessons].sort((a, b) => a.sort_order - b.sort_order)
   const cumulativeLetters = {}
   const accum = []
   for (const l of sortedLessons) {
-    accum.push(...l.new_letters ?? l.newLetters ?? [])
+    accum.push(...(l.new_letters ?? []))
     cumulativeLetters[l.id] = [...accum]
   }
 

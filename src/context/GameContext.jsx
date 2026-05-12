@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
-import { DEFAULT_WORDS, DEFAULT_LESSONS, getLessonsUpTo } from '../data/lessons'
+import { getLessonsUpTo } from '../data/lessons'
 import { supabase } from '../utils/supabase'
 
 const GameContext = createContext(null)
@@ -17,9 +17,9 @@ function fromCache(key, fallback) {
 
 function defaultSettings() {
   return {
-    contentType: 'todas',   // todas | silaba | palabra | frase
-    timeLimit: 0,           // 0 | 10 | 30 | 60
-    lessonId: null,         // null = all lessons; string = cumulative up to that lesson
+    contentType: 'todas',
+    timeLimit: 0,
+    lessonId: null,
     animationsEnabled: true,
   }
 }
@@ -32,12 +32,11 @@ async function fetchTable(table) {
   return data
 }
 
-async function syncTable(table, rows, conflictCol = 'id') {
+async function syncTable(table, rows) {
   if (rows.length > 0) {
-    const { error } = await supabase.from(table).upsert(rows, { onConflict: conflictCol })
+    const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' })
     if (error) { console.error(`[supabase] ${table} upsert`, error); return }
   }
-  // Delete rows removed locally
   const { data: dbRows } = await supabase.from(table).select('id')
   if (dbRows) {
     const live = new Set(rows.map(r => r.id))
@@ -52,8 +51,8 @@ async function syncTable(table, rows, conflictCol = 'id') {
 
 const initialState = {
   screen: 'home',
-  words:   fromCache(WORDS_KEY,   DEFAULT_WORDS),
-  lessons: fromCache(LESSONS_KEY, DEFAULT_LESSONS),
+  words:    fromCache(WORDS_KEY,    []),
+  lessons:  fromCache(LESSONS_KEY,  []),
   settings: fromCache(SETTINGS_KEY, null) ?? defaultSettings(),
   session: { correct: 0, wrong: 0, total: 0, history: [] },
   currentWord: null,
@@ -181,12 +180,6 @@ function reducer(state, action) {
       return { ...state, lessons: action.lessons }
     }
 
-    case 'RESET': {
-      localStorage.setItem(WORDS_KEY,   JSON.stringify(DEFAULT_WORDS))
-      localStorage.setItem(LESSONS_KEY, JSON.stringify(DEFAULT_LESSONS))
-      return { ...state, words: DEFAULT_WORDS, lessons: DEFAULT_LESSONS }
-    }
-
     case 'END_GAME':
       return { ...state, screen: 'results', timerActive: false }
 
@@ -207,18 +200,7 @@ export function GameProvider({ children }) {
         dispatch({ type: 'SET_LOADED' })
         return
       }
-      if (dbLessons.length === 0 && dbWords.length === 0) {
-        // Seed: lessons before words to respect any FK-like ordering
-        await syncTable('lessons', DEFAULT_LESSONS)
-        await syncTable('words',   DEFAULT_WORDS)
-        dispatch({ type: 'HYDRATE', words: DEFAULT_WORDS, lessons: DEFAULT_LESSONS })
-      } else {
-        dispatch({
-          type: 'HYDRATE',
-          words:   dbWords.length   > 0 ? dbWords   : DEFAULT_WORDS,
-          lessons: dbLessons.length > 0 ? dbLessons : DEFAULT_LESSONS,
-        })
-      }
+      dispatch({ type: 'HYDRATE', words: dbWords, lessons: dbLessons })
     }
     init()
   }, [])
@@ -241,21 +223,10 @@ export function GameProvider({ children }) {
     syncTable('lessons', lessons)
   }, [])
 
-  const resetAll = useCallback(async () => {
-    dispatch({ type: 'RESET' })
-    // Delete all words before touching lessons (avoids any ordering issues)
-    const { data: wordIds } = await supabase.from('words').select('id')
-    if (wordIds?.length) {
-      await supabase.from('words').delete().in('id', wordIds.map(r => r.id))
-    }
-    await syncTable('lessons', DEFAULT_LESSONS)
-    await supabase.from('words').insert(DEFAULT_WORDS)
-  }, [])
-
   return (
     <GameContext.Provider value={{
       state, startGame, answer, nextWord, tick, setScreen,
-      updateSettings, updateWords, updateLessons, resetAll, endGame,
+      updateSettings, updateWords, updateLessons, endGame,
     }}>
       {children}
     </GameContext.Provider>
