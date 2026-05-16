@@ -17,7 +17,7 @@ const LESSON_COLORS = [
 
 export default function LessonSelectScreen() {
   const { state, updateSettings, startGame, setScreen } = useGame()
-  const { lessons } = state
+  const { lessons, progress } = state
 
   const sortedLessons = [...lessons].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -28,6 +28,10 @@ export default function LessonSelectScreen() {
     accum.push(...(l.new_letters ?? []))
     cumulativeLetters[l.id] = [...accum]
   }
+
+  const completedLessons = new Set(
+    progress?.users?.[progress?.currentUser]?.completedLessons ?? []
+  )
 
   const pick = (lessonId) => {
     updateSettings({ lessonId })
@@ -61,8 +65,9 @@ export default function LessonSelectScreen() {
           </motion.button>
 
           {sortedLessons.map((l, i) => {
-            const c = LESSON_COLORS[i % LESSON_COLORS.length]
+            const c    = LESSON_COLORS[i % LESSON_COLORS.length]
             const letters = cumulativeLetters[l.id] ?? []
+            const done = completedLessons.has(l.id)
             return (
               <motion.button
                 key={l.id}
@@ -71,7 +76,12 @@ export default function LessonSelectScreen() {
                 className={`btn-press ${c.bg} border-4 ${c.border} rounded-3xl px-6 py-5 text-left w-full`}
                 style={{ boxShadow: `0 5px 0 ${c.shadow}` }}
               >
-                <span className={`font-kids text-3xl ${c.text}`}>{l.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className={`font-kids text-3xl ${c.text} flex-1`}>{l.name}</span>
+                  {done && (
+                    <span className="text-3xl" title="¡Lección completada!">⭐</span>
+                  )}
+                </div>
                 <p className={`font-body text-sm mt-1 ${c.text} opacity-70`}>
                   letras: {letters.join(', ')}
                 </p>

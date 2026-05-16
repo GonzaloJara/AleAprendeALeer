@@ -23,6 +23,13 @@ const BOOST_OPTIONS = [
   { value: 100, label: 'Solo nueva' },
 ]
 
+const TARGET_OPTIONS = [
+  { value: 10, label: '10 correctas' },
+  { value: 15, label: '15 correctas ✨' },
+  { value: 20, label: '20 correctas' },
+  { value: 30, label: '30 correctas' },
+]
+
 function OptionRow({ label, children }) {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-md">
@@ -145,6 +152,14 @@ export default function SettingsScreen() {
           <OptionRow label="Tiempo por palabra ⏱️">
             {TIME_OPTIONS.map(o => (
               <Chip key={o.value} selected={settings.timeLimit === o.value} onClick={() => updateSettings({ timeLimit: o.value })}>
+                {o.label}
+              </Chip>
+            ))}
+          </OptionRow>
+
+          <OptionRow label="Correctas para completar nivel 🎯">
+            {TARGET_OPTIONS.map(o => (
+              <Chip key={o.value} selected={(settings.completionTarget ?? 15) === o.value} onClick={() => updateSettings({ completionTarget: o.value })}>
                 {o.label}
               </Chip>
             ))}

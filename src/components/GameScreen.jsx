@@ -55,9 +55,10 @@ function ScoreBadge({ correct, wrong }) {
 }
 
 export default function GameScreen() {
-  const { state, answer, nextWord, tick, endGame } = useGame()
-  const { currentWord, session, feedback, settings, timeLeft, timerActive } = state
+  const { state, answer, nextWord, tick, endGame, setScreen } = useGame()
+  const { currentWord, session, feedback, settings, timeLeft, timerActive, lessonCompleted } = state
   const anim = settings.animationsEnabled !== false
+  const target = settings.completionTarget ?? 15
 
   useEffect(() => {
     if (!timerActive) return
@@ -65,7 +66,10 @@ export default function GameScreen() {
     return () => clearInterval(id)
   }, [timerActive, tick])
 
-  const handleNext = useCallback(() => { nextWord() }, [nextWord])
+  const handleNext = useCallback(() => {
+    if (lessonCompleted) setScreen('lesson-complete')
+    else nextWord()
+  }, [lessonCompleted, nextWord, setScreen])
 
   if (!currentWord) return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-purple-200 to-yellow-100">
@@ -102,6 +106,22 @@ export default function GameScreen() {
       {settings.timeLimit > 0 && (
         <div className="px-6 mt-1">
           <TimerBar timeLeft={timeLeft} total={settings.timeLimit} animated={anim} />
+        </div>
+      )}
+
+      {/* Lesson completion progress */}
+      {settings.lessonId && (
+        <div className="px-6 mt-2 flex items-center gap-3">
+          <span className="font-body text-sm font-bold text-purple-500 shrink-0">
+            🎯 {session.correct}/{target}
+          </span>
+          <div className="flex-1 bg-white/60 rounded-full h-3 overflow-hidden">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-purple-400 to-green-400"
+              animate={{ width: `${Math.min(100, (session.correct / target) * 100)}%` }}
+              transition={{ duration: 0.4 }}
+            />
+          </div>
         </div>
       )}
 

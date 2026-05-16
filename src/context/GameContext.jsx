@@ -7,6 +7,7 @@ const GameContext = createContext(null)
 const WORDS_KEY    = 'aprende-leer-words'
 const LESSONS_KEY  = 'aprende-leer-lessons'
 const SETTINGS_KEY = 'aprende-leer-settings'
+const PROGRESS_KEY = 'aprende-leer-progress'
 
 function fromCache(key, fallback) {
   try {
@@ -21,8 +22,13 @@ function defaultSettings() {
     timeLimit: 0,
     lessonId: null,
     lessonBoost: 80,
+    completionTarget: 15,
     animationsEnabled: true,
   }
+}
+
+function defaultProgress() {
+  return { currentUser: null, users: {} }
 }
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -55,6 +61,7 @@ const initialState = {
   words:    fromCache(WORDS_KEY,    []),
   lessons:  fromCache(LESSONS_KEY,  []),
   settings: fromCache(SETTINGS_KEY, null) ?? defaultSettings(),
+  progress: fromCache(PROGRESS_KEY, null) ?? defaultProgress(),
   session: { correct: 0, wrong: 0, total: 0, history: [] },
   currentWord: null,
   queue: [],
@@ -62,6 +69,7 @@ const initialState = {
   timeLeft: 0,
   timerActive: false,
   loading: true,
+  lessonCompleted: false,
 }
 
 function shuffle(arr) {
@@ -141,22 +149,40 @@ function reducer(state, action) {
         feedback: null,
         timeLeft: state.settings.timeLimit || 0,
         timerActive: state.settings.timeLimit > 0,
+        lessonCompleted: false,
       }
     }
 
     case 'ANSWER': {
       const { correct } = action
-      return {
-        ...state,
-        feedback: correct ? 'correct' : 'wrong',
-        timerActive: false,
-        session: {
-          correct:  state.session.correct  + (correct ? 1 : 0),
-          wrong:    state.session.wrong    + (correct ? 0 : 1),
-          total:    state.session.total    + 1,
-          history:  [...state.session.history, { word: state.currentWord, correct }],
-        },
+      const newCorrect = state.session.correct + (correct ? 1 : 0)
+      const newSession = {
+        correct: newCorrect,
+        wrong:   state.session.wrong + (correct ? 0 : 1),
+        total:   state.session.total + 1,
+        history: [...state.session.history, { word: state.currentWord, correct }],
       }
+
+      // Check lesson completion threshold
+      const target = state.settings.completionTarget ?? 15
+      if (correct && state.settings.lessonId && newCorrect >= target) {
+        const user = state.progress?.currentUser
+        let progress = state.progress ?? defaultProgress()
+        if (user) {
+          const prev = progress.users[user]?.completedLessons ?? []
+          const completedLessons = prev.includes(state.settings.lessonId)
+            ? prev
+            : [...prev, state.settings.lessonId]
+          progress = {
+            ...progress,
+            users: { ...progress.users, [user]: { ...(progress.users[user] ?? {}), completedLessons } },
+          }
+          localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
+        }
+        return { ...state, feedback: 'correct', timerActive: false, session: newSession, progress, lessonCompleted: true }
+      }
+
+      return { ...state, feedback: correct ? 'correct' : 'wrong', timerActive: false, session: newSession }
     }
 
     case 'NEXT_WORD': {
@@ -211,6 +237,19 @@ function reducer(state, action) {
     case 'END_GAME':
       return { ...state, screen: 'results', timerActive: false }
 
+    case 'SET_USER': {
+      const progress = {
+        ...state.progress,
+        currentUser: action.name,
+        users: {
+          ...state.progress.users,
+          [action.name]: state.progress.users[action.name] ?? { completedLessons: [] },
+        },
+      }
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
+      return { ...state, progress }
+    }
+
     default:
       return state
   }
@@ -241,6 +280,8 @@ export function GameProvider({ children }) {
   const updateSettings = useCallback((s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s }), [])
   const endGame        = useCallback(() => dispatch({ type: 'END_GAME' }), [])
 
+  const setUser   = useCallback((name) => dispatch({ type: 'SET_USER', name }), [])
+
   const updateWords = useCallback((words) => {
     dispatch({ type: 'UPDATE_WORDS', words })
     syncTable('words', words)
@@ -254,7 +295,7 @@ export function GameProvider({ children }) {
   return (
     <GameContext.Provider value={{
       state, startGame, answer, nextWord, tick, setScreen,
-      updateSettings, updateWords, updateLessons, endGame,
+      updateSettings, updateWords, updateLessons, endGame, setUser,
     }}>
       {children}
     </GameContext.Provider>
