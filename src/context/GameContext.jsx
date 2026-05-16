@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
+import { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react'
 import { getLessonsUpTo } from '../data/lessons'
 import { supabase } from '../utils/supabase'
 
@@ -31,7 +31,12 @@ function defaultProgress() {
   return { currentUser: null, users: {} }
 }
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
+// Stable ID derived from display name (same logic used for DB rows)
+function userSlug(name) {
+  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'user'
+}
+
+// ── Supabase helpers ──────────────────────────────────────────────────────────
 
 async function fetchTable(table) {
   const { data, error } = await supabase.from(table).select('*')
@@ -52,6 +57,36 @@ async function syncTable(table, rows) {
       await supabase.from(table).delete().in('id', toDelete)
     }
   }
+}
+
+async function upsertUser(name) {
+  const { error } = await supabase
+    .from('users')
+    .upsert({ id: userSlug(name), name }, { onConflict: 'id' })
+  if (error) console.error('[supabase] users upsert', error)
+}
+
+async function upsertLessonProgress(userName, lessonId) {
+  const uid = userSlug(userName)
+  const { error } = await supabase
+    .from('lesson_progress')
+    .upsert({ id: `${uid}_${lessonId}`, user_id: uid, lesson_id: lessonId }, { onConflict: 'id' })
+  if (error) console.error('[supabase] lesson_progress upsert', error)
+}
+
+// Transform flat DB rows → app progress shape
+function buildProgressFromDb(dbUsers, dbProgress, cachedCurrentUser) {
+  const users = {}
+  for (const u of dbUsers) {
+    users[u.name] = {
+      completedLessons: dbProgress
+        .filter(p => p.user_id === u.id)
+        .map(p => p.lesson_id),
+    }
+  }
+  // Keep the device's last-used user if they still exist in DB; otherwise null
+  const currentUser = users[cachedCurrentUser] ? cachedCurrentUser : (Object.keys(users)[0] ?? null)
+  return { currentUser, users }
 }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
@@ -104,21 +139,14 @@ function buildQueue(words, lessons, settings) {
     return shuffle(pool)
   }
 
-  // Weighted queue: each slot picks from current pool with probability=boost,
-  // previous pool otherwise. Both sub-pools cycle independently when exhausted.
   const curr = shuffle([...currentWords])
   const prev = shuffle([...previousWords])
   const size = Math.max(20, currentWords.length + previousWords.length)
   let ci = 0, pi = 0
   const result = []
   for (let i = 0; i < size; i++) {
-    if (Math.random() < boost) {
-      result.push(curr[ci % curr.length])
-      ci++
-    } else {
-      result.push(prev[pi % prev.length])
-      pi++
-    }
+    if (Math.random() < boost) { result.push(curr[ci % curr.length]); ci++ }
+    else                       { result.push(prev[pi % prev.length]); pi++ }
   }
   return result
 }
@@ -126,12 +154,15 @@ function buildQueue(words, lessons, settings) {
 function reducer(state, action) {
   switch (action.type) {
     case 'HYDRATE': {
-      const words   = action.words   ?? state.words
-      const lessons = action.lessons ?? state.lessons
-      localStorage.setItem(WORDS_KEY,   JSON.stringify(words))
-      localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons))
-      return { ...state, words, lessons, loading: false }
+      const words    = action.words    ?? state.words
+      const lessons  = action.lessons  ?? state.lessons
+      const progress = action.progress ?? state.progress
+      localStorage.setItem(WORDS_KEY,    JSON.stringify(words))
+      localStorage.setItem(LESSONS_KEY,  JSON.stringify(lessons))
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
+      return { ...state, words, lessons, progress, loading: false }
     }
+
     case 'SET_LOADED':
       return { ...state, loading: false }
 
@@ -163,7 +194,6 @@ function reducer(state, action) {
         history: [...state.session.history, { word: state.currentWord, correct }],
       }
 
-      // Check lesson completion threshold
       const target = state.settings.completionTarget ?? 15
       if (correct && state.settings.lessonId && newCorrect >= target) {
         const user = state.progress?.currentUser
@@ -171,8 +201,7 @@ function reducer(state, action) {
         if (user) {
           const prev = progress.users[user]?.completedLessons ?? []
           const completedLessons = prev.includes(state.settings.lessonId)
-            ? prev
-            : [...prev, state.settings.lessonId]
+            ? prev : [...prev, state.settings.lessonId]
           progress = {
             ...progress,
             users: { ...progress.users, [user]: { ...(progress.users[user] ?? {}), completedLessons } },
@@ -260,18 +289,46 @@ function reducer(state, action) {
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
+  // ── Boot: fetch everything from Supabase ──────────────────────────────────
   useEffect(() => {
     async function init() {
-      const [dbLessons, dbWords] = await Promise.all([fetchTable('lessons'), fetchTable('words')])
+      const [dbLessons, dbWords, dbUsers, dbProgress] = await Promise.all([
+        fetchTable('lessons'),
+        fetchTable('words'),
+        fetchTable('users'),
+        fetchTable('lesson_progress'),
+      ])
+
       if (dbLessons === null || dbWords === null) {
         dispatch({ type: 'SET_LOADED' })
         return
       }
-      dispatch({ type: 'HYDRATE', words: dbWords, lessons: dbLessons })
+
+      // Rebuild progress from DB if available; fall back to cache
+      let progress = null
+      if (dbUsers !== null && dbProgress !== null) {
+        const cachedUser = fromCache(PROGRESS_KEY, null)?.currentUser ?? null
+        progress = buildProgressFromDb(dbUsers, dbProgress, cachedUser)
+      }
+
+      dispatch({ type: 'HYDRATE', words: dbWords, lessons: dbLessons, progress })
     }
     init()
   }, [])
 
+  // ── Sync lesson completion to DB (fires once when flag turns true) ─────────
+  const completionSyncedRef = useRef(false)
+  useEffect(() => {
+    if (state.lessonCompleted && !completionSyncedRef.current) {
+      completionSyncedRef.current = true
+      const user     = state.progress?.currentUser
+      const lessonId = state.settings.lessonId
+      if (user && lessonId) upsertLessonProgress(user, lessonId)
+    }
+    if (!state.lessonCompleted) completionSyncedRef.current = false
+  }, [state.lessonCompleted, state.progress, state.settings.lessonId])
+
+  // ── Callbacks ─────────────────────────────────────────────────────────────
   const startGame      = useCallback(() => dispatch({ type: 'START_GAME' }), [])
   const answer         = useCallback((correct) => dispatch({ type: 'ANSWER', correct }), [])
   const nextWord       = useCallback(() => dispatch({ type: 'NEXT_WORD' }), [])
@@ -280,7 +337,10 @@ export function GameProvider({ children }) {
   const updateSettings = useCallback((s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s }), [])
   const endGame        = useCallback(() => dispatch({ type: 'END_GAME' }), [])
 
-  const setUser   = useCallback((name) => dispatch({ type: 'SET_USER', name }), [])
+  const setUser = useCallback((name) => {
+    dispatch({ type: 'SET_USER', name })
+    upsertUser(name) // fire-and-forget DB sync
+  }, [])
 
   const updateWords = useCallback((words) => {
     dispatch({ type: 'UPDATE_WORDS', words })
